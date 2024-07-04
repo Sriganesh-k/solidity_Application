@@ -3,71 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Data Scientist Login</title>
-    <style>
-        body {
-            font-family: 'Roboto', sans-serif;
-            background-color: #e4fad0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            background-image: url('bacground image.jpg');
-            background-size: cover;
-            background-repeat: no-repeat;
-            background-attachment: fixed;
-        }
-        .login-container {
-            background-color: rgba(255, 255, 255, 0.8); /* Lightly transparent background */
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            text-align: center;
-        }
-        h2 {
-            font-weight: 500;
-            margin-bottom: 20px;
-            color: #333;
-        }
-        input[type="text"], input[type="password"] {
-            width: 100%;
-            padding: 12px;
-            margin: 10px 0;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            box-sizing: border-box;
-            outline: none;
-            transition: border-color 0.3s, box-shadow 0.3s;
-            background-color: rgba(255, 255, 255, 0.8); /* Lightly transparent input background */
-        }
-        input[type="text"]:focus, input[type="password"]:focus {
-            border-color: #00ff2a;
-            box-shadow: 0 0 5px #00ff2a;
-        }
-        button {
-            background-color: #07e821;
-            color: #ffffff;
-            padding: 10px 20px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            transition: background-color 0.3s, box-shadow 0.3s;
-            box-shadow: 0 0 20px rgba(116, 255, 167, 0.8);
-        }
-        button:hover {
-            background-color: #00ff0dac;
-            box-shadow: 0 0 10px rgba(164, 255, 181, 0.599);
-        }
-    </style>
+    <title>Login</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="login-container">
-        <h2>Data Scientist Login</h2>
+    <div class="form-container">
+        <h1>Login</h1>
         <form action="/login" method="post">
-            <input type="text" name="username" placeholder="Username" required>
-            <input type="password" name="password" placeholder="Password" required>
-            <button type="submit">Login</button>
+            <div class="form-group">
+                <label for="username">Username:</label>
+                <input type="text" id="username" name="username" required>
+            </div>
+            <div class="form-group">
+                <label for="password">Password:</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+            <div class="form-buttons">
+                <button type="submit">Login</button>
+            </div>
         </form>
     </div>
 </body>

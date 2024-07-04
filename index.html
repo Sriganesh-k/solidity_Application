@@ -3,51 +3,46 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Employee Information</title>
+    <title>Registration Form</title>
     <link rel="stylesheet" href="styles.css">
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="form-container">
-        <h1>Employee Information</h1>
+        <h1>Registration Form</h1>
         <form action="/submit" method="post">
             <div class="form-group">
-                <label for="first-name">Employee-First Name:</label>
+                <label for="first-name">First Name:</label>
                 <input type="text" id="first-name" name="firstName" required>
             </div>
             <div class="form-group">
-                <label for="last-name">Employee-Last Name:</label>
+                <label for="last-name">Last Name:</label>
                 <input type="text" id="last-name" name="lastName" required>
             </div>
             <div class="form-group">
-                <label for="age">Employee-Age:</label>
+                <label for="age">Age:</label>
                 <input type="number" id="age" name="age" required>
             </div>
             <div class="form-group">
-                <label for="phone">Employee-Phone Number (with Country Code):</label>
-                <input type="tel" id="phone" name="phone" required>
-            </div>
-            <div class="form-group">
-                <label for="address">Employee-Address:</label>
-                <input type="text" id="address" name="address" required>
-            </div>
-            <div class="form-group">
-                <label for="country">Emp-Country:</label>
-                <input type="text" id="country" name="country" required>
-            </div>
-            <div class="form-group">
-                <label for="email">Employee-Email:</label>
+                <label for="email">Email ID:</label>
                 <input type="email" id="email" name="email" required>
             </div>
             <div class="form-group">
-                <label for="privacy-agreement">I accept the privacy regulations of the company:</label>
+                <label for="id-card-number">ID Card Number:</label>
+                <input type="text" id="id-card-number" name="idCardNumber" required>
+            </div>
+            <div class="form-group checkbox">
                 <input type="checkbox" id="privacy-agreement" name="privacyAgreement" required>
+                <label for="privacy-agreement">I accept the privacy regulations of the company:</label>
             </div>
-            <div class="form-group">
-                <label for="data-access-agreement">I accept that my data will be accessed by the data scientist:</label>
+            <div class="form-group checkbox">
                 <input type="checkbox" id="data-access-agreement" name="dataAccessAgreement" required>
+                <label for="data-access-agreement">I accept that my data will be accessed by the data scientist:</label>
             </div>
-            <button type="submit">Submit</button>
+            <div class="form-buttons">
+                <button type="button" onclick="window.location.href='/';">Cancel</button>
+                <button type="submit">Submit</button>
+            </div>
         </form>
     </div>
 </body>

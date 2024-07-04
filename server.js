@@ -2,10 +2,8 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const path = require('path');
 const { MongoClient } = require('mongodb');
-const { v4: uuidv4 } = require('uuid');
 const dotenv = require('dotenv');
 const session = require('express-session');
-const fs = require('fs');
 const Ajv = require('ajv');
 
 dotenv.config();
@@ -26,12 +24,10 @@ const schema = {
         "firstName": { "type": "string" },
         "lastName": { "type": "string" },
         "age": { "type": "integer" },
-        "phone": { "type": "string" },
-        "address": { "type": "string" },
-        "country": { "type": "string" },
-        "email": { "type": "string", "format": "email" }
+        "email": { "type": "string", "format": "email" },
+        "idCardNumber": { "type": "string" }
     },
-    "required": ["firstName", "lastName", "age", "phone", "address", "country", "email"]
+    "required": ["firstName", "lastName", "age", "email", "idCardNumber"]
 };
 
 const validate = ajv.compile(schema);
@@ -92,51 +88,14 @@ app.post('/login', (req, res) => {
     }
 });
 
-// Anonymize data function
-function anonymizeData(data) {
-    return {
-        employee_id: uuidv4(),
-        age: parseInt(data.age),
-        ecg_reading: parseInt(data.ecgReading),
-        bpm: parseInt(data.bpm)
-    };
-}
-
-//Function to save data locally
-function saveDataLocally(directory, filename, data) {
-    const dirPath = path.join(__dirname, 'datasets', directory);
-    if (!fs.existsSync(dirPath)) {
-        fs.mkdirSync(dirPath, { recursive: true });
-    }
-    const filePath = path.join(dirPath, filename);
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
-}
-
 // Handle form submission and store data in MongoDB
 app.post('/submit', async (req, res) => {
-    const { firstName, lastName, age, phone, address, country, email } = req.body;
+    const { firstName, lastName, age, email, idCardNumber } = req.body;
 
-    let dataset;
-    console.log(`Searching for person: ${firstName} ${lastName}`);
-    for (let i = 1; i <= 5; i++) {
-        const filePath = path.join(__dirname, 'datasets', `person${i}`, 'dataset.json');
-        
-        try {
-            const personData = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-            console.log(`Checking dataset person${i}:`, personData);
-            if (personData.firstName === firstName && personData.lastName === lastName) {
-                dataset = personData;
-                console.log(`Match found in dataset person${i}`);
-                break;
-            }
-        } catch (err) {
-            console.error(`Error reading or parsing file ${filePath}:`, err);
-            continue;
-        }
-    }
-
-    if (!dataset) {
-        res.status(400).send('Person not found in the dataset.');
+    // Validate the incoming data
+    const valid = validate(req.body);
+    if (!valid) {
+        res.status(400).send('Invalid form data');
         return;
     }
 
@@ -149,25 +108,14 @@ app.post('/submit', async (req, res) => {
             firstName,
             lastName,
             age: parseInt(age),
-            phone: parseInt(phone),
-            address,
-            country,
             email,
-            ecg_reading: dataset.ecgReading,
-            bpm: dataset.bpm
+            idCardNumber
         };
         await employeeDetailsCollection.insertOne(employeeDetails);
-        saveDataLocally(`person${dataset.person}`, 'actual_data.json', employeeDetails);
-
-        // Anonymize data and insert into the employees collection
-        const employeesCollection = db.collection('employees');
-        const anonymizedData = anonymizeData({ age, ecgReading: dataset.ecgReading, bpm: dataset.bpm });
-        await employeesCollection.insertOne(anonymizedData);
-        saveDataLocally(`person${dataset.person}`, 'anonymized_data.json', anonymizedData);
 
         console.log('Data inserted successfully');
 
-        res.send(`Form submitted successfully!<br>First Name: ${firstName}<br>Last Name: ${lastName}<br>Age: ${age}<br>Phone: ${phone}<br>Address: ${address}<br>Country: ${country}<br>Email: ${email}<br>ECG Reading: ${dataset.ecgReading}<br>Bpm: ${dataset.bpm}`);
+        res.send(`Form submitted successfully!<br>First Name: ${firstName}<br>Last Name: ${lastName}<br>Age: ${age}<br>Email: ${email}<br>ID Card Number: ${idCardNumber}`);
     } catch (error) {
         console.error('Error inserting data into MongoDB:', error);
         res.status(500).send('Internal Server Error');
@@ -188,10 +136,92 @@ app.get('/anonymized-data', checkAuthentication, async (req, res) => {
     try {
         const db = client.db('employee_db');
         const collection = db.collection('employees');
-
         const anonymizedData = await collection.find({}).toArray();
 
-        res.json(anonymizedData);
+        let tableRows = '';
+        anonymizedData.forEach(item => {
+            tableRows += `
+                <tr>
+                    <td>${item.employee_id}</td>
+                    <td>${item.age}</td>
+                    <td>${item.ecg_reading}</td>
+                    <td>${item.bpm}</td>
+                </tr>
+            `;
+        });
+
+        res.send(`
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Data Scientist Information</title>
+                <link rel="stylesheet" href="styles.css">
+                <style>
+                    body {
+                        font-family: 'Roboto', sans-serif;
+                        background-color: #f4f7f6;
+                        margin: 0;
+                        padding: 20px;
+                    }
+
+                    .table-container {
+                        background-color: rgba(0, 0, 0, 0.8); /* Darker transparent background */
+                        padding: 20px;
+                        border-radius: 10px;
+                        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+                        max-width: 1000px;
+                        margin: auto;
+                        color: #fff;
+                    }
+
+                    table {
+                        width: 100%;
+                        border-collapse: collapse;
+                        margin-top: 20px;
+                    }
+
+                    th, td {
+                        padding: 10px;
+                        text-align: left;
+                        border-bottom: 1px solid #ddd;
+                    }
+
+                    th {
+                        background-color: #ffd700; /* Gold color */
+                        color: black;
+                    }
+
+                    tr:nth-child(even) {
+                        background-color: #333;
+                    }
+
+                    tr:hover {
+                        background-color: #444;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="table-container">
+                    <h1>Data Scientist Information</h1>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Employee ID</th>
+                                <th>Age</th>
+                                <th>ECG Reading</th>
+                                <th>BPM</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${tableRows}
+                        </tbody>
+                    </table>
+                </div>
+            </body>
+            </html>
+        `);
     } catch (error) {
         console.error('Error retrieving anonymized data from MongoDB:', error);
         res.status(500).send('Internal Server Error');
