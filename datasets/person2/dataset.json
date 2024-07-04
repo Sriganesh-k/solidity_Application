@@ -3,5 +3,8 @@
     "lastName": "dhoni",
     "ecgReading": 70,
     "bpm": 65,
-    "person": 2
+    "person": 2,
+    "age": 39,
+    "email": "ms.dhoni@example.com",
+    "idCardNumber": "ID654321"
 }

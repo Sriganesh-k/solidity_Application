@@ -1,7 +1,10 @@
 {
-    "firstName": "elon",
-    "lastName": "musk",
-    "ecgReading": 20,
-    "bpm": 25,
-    "person": 4
+    "firstName": "sam",
+    "lastName": "altman",
+    "ecgReading": 90,
+    "bpm": 95,
+    "person": 5,
+    "age": 36,
+    "email": "sam.altman@example.com",
+    "idCardNumber": "ID654789"
 }
