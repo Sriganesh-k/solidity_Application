@@ -1,0 +1,27 @@
+[
+  {
+    "idCardNumber": "01",
+    "ecgReading": 16377313.882487664,
+    "bpm": 16377313.882487664
+  },
+  {
+    "idCardNumber": "02",
+    "ecgReading": 16763665.686429117,
+    "bpm": 16763665.686429117
+  },
+  {
+    "idCardNumber": "03",
+    "ecgReading": 65,
+    "bpm": 68
+  },
+  {
+    "idCardNumber": "04",
+    "ecgReading": 72,
+    "bpm": 78
+  },
+  {
+    "idCardNumber": "05",
+    "ecgReading": 75,
+    "bpm": 80
+  }
+]
