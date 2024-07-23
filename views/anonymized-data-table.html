@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anonymized Data Table</title>
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-image: url('backgroundgold.jpg');
+            background-size: cover;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.8);
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0px 0px 15px rgba(0, 0, 0, 0.3);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        table, th, td {
+            border: 1px solid #ddd;
+        }
+        th, td {
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Anonymized Data Table</h1>
+        <table>
+            <thead>
+                <tr>
+                    <th>Timestamp</th>
+                    <th>ECG Reading</th>
+                    <th>BPM</th>
+                </tr>
+            </thead>
+            <tbody id="data-table-body">
+            </tbody>
+        </table>
+    </div>
+    <script>
+        document.addEventListener("DOMContentLoaded", async function() {
+            const response = await fetch('/api/anonymized-data');
+            const data = await response.json();
+            const tableBody = document.getElementById('data-table-body');
+
+            data.forEach(item => {
+                const row = document.createElement('tr');
+                const timestampCell = document.createElement('td');
+                const ecgCell = document.createElement('td');
+                const bpmCell = document.createElement('td');
+
+                timestampCell.textContent = item.timestamp;
+                ecgCell.textContent = item.ecg;
+                bpmCell.textContent = item.bpm;
+
+                row.appendChild(timestampCell);
+                row.appendChild(ecgCell);
+                row.appendChild(bpmCell);
+                tableBody.appendChild(row);
+            });
+        });
+    </script>
+</body>
+</html>

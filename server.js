@@ -7,18 +7,17 @@ const session = require('express-session');
 const Ajv = require('ajv');
 const fs = require('fs');
 const csv = require('csv-parser');
+const laplaceNoise = require('./laplacenoise'); // Import manual Laplace noise module
 
 dotenv.config();
 
 const ajv = new Ajv();
 
-// Define custom format for email validation
 ajv.addFormat('email', (email) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailRegex.test(email);
 });
 
-// Define the JSON schema with email format validation
 const schema = {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "type": "object",
@@ -39,11 +38,9 @@ const validate = ajv.compile(schema);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// MongoDB connection URI
 const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017';
 const client = new MongoClient(uri);
 
-// Connect to MongoDB
 async function connectToDB() {
     try {
         await client.connect();
@@ -55,82 +52,49 @@ async function connectToDB() {
 
 connectToDB().catch(console.error);
 
-// Middleware to parse form data and JSON
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 
-// Session middleware
 app.use(session({
     secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: true,
-    cookie: { secure: false }  // Set secure to true if using HTTPS
+    cookie: { secure: false }
 }));
 
-// Serve static files
-app.use(express.static(path.join(__dirname)));
+// Serve static files from the 'views' and root directories
+app.use(express.static(path.join(__dirname, 'views')));
+app.use(express.static(__dirname));
 
-// Serve the HTML form
+// Serve index.html
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
+    res.sendFile(path.join(__dirname, 'views', 'index.html'));
 });
 
-// Serve the login page
+// Serve login.html
 app.get('/login', (req, res) => {
-    res.sendFile(path.join(__dirname, 'login.html'));
+    res.sendFile(path.join(__dirname, 'views', 'login.html'));
 });
 
-// Handle login
+// Handle login form submission
 app.post('/login', (req, res) => {
     const { username, password } = req.body;
 
     if (username === process.env.USERNAME && password === process.env.PASSWORD) {
         req.session.isAuthenticated = true;
-        res.redirect('/anonymized-data');
+        res.redirect('/anonymized-data-graph');
     } else {
         res.status(401).send('Invalid username or password');
     }
 });
 
-// Function to read CSV and calculate average ECG and BPM
 const path_to_csv_files = path.join(__dirname, 'path_to_csv_files');
 
-function calculateAveragesFromCSV(id) {
-    return new Promise((resolve, reject) => {
-        const filePath = path.join(path_to_csv_files, `person_${id}.csv`);
-        const data = [];
-        fs.createReadStream(filePath)
-            .pipe(csv({
-                headers: false
-            }))
-            .on('data', (row) => {
-                const value = parseFloat(row[0]);
-                if (!isNaN(value)) {
-                    data.push(value);
-                }
-            })
-            .on('end', () => {
-                if (data.length === 0) {
-                    return reject(new Error('CSV file is empty or contains no valid data'));
-                }
-                const total = data.reduce((sum, value) => sum + value, 0);
-                const avg = total / data.length;
-                resolve({ avgECG: avg, avgBPM: avg }); // Assuming both ECG and BPM are the same for simplicity
-            })
-            .on('error', (error) => {
-                reject(error);
-            });
-    });
-}
-
-// Handle form submission and store data in MongoDB
 app.post('/submit', async (req, res) => {
-    // Convert age to an integer and privacyAgreement and dataAccessAgreement to boolean
     req.body.age = parseInt(req.body.age, 10);
     req.body.privacyAgreement = req.body.privacyAgreement === 'on';
     req.body.dataAccessAgreement = req.body.dataAccessAgreement === 'on';
 
-    // Validate the incoming data
     const valid = validate(req.body);
     if (!valid) {
         console.log(validate.errors);
@@ -143,49 +107,104 @@ app.post('/submit', async (req, res) => {
         const employeeDetailsCollection = db.collection('employee_details');
         const anonymizedDataCollection = db.collection('anonymized_data');
 
-        // Read dataset.json file
-        const datasetPath = path.join(__dirname, 'dataset.json');
-        const dataset = JSON.parse(fs.readFileSync(datasetPath, 'utf-8'));
-        let matchedData = dataset.find(item => item.idCardNumber === req.body.idCardNumber);
+        // Process the CSV file first
+        const filePath = path.join(path_to_csv_files, `person_${req.body.idCardNumber}.csv`);
+        const ecgData = [];
+        const bpmData = [];
 
-        if (!matchedData) {
-            const { avgECG, avgBPM } = await calculateAveragesFromCSV(req.body.idCardNumber);
-            matchedData = {
-                idCardNumber: req.body.idCardNumber,
-                ecgReading: avgECG,
-                bpm: avgBPM
-            };
-            dataset.push(matchedData);
-            fs.writeFileSync(datasetPath, JSON.stringify(dataset, null, 2));
-        } else {
-            const { avgECG, avgBPM } = await calculateAveragesFromCSV(req.body.idCardNumber);
-            matchedData.ecgReading = avgECG;
-            matchedData.bpm = avgBPM;
-            fs.writeFileSync(datasetPath, JSON.stringify(dataset, null, 2));
-        }
+        fs.createReadStream(filePath)
+            .pipe(csv())
+            .on('data', (row) => {
+                const ecg = parseFloat(row.ecgReading);
+                const bpm = parseInt(row.bpm, 10);
+                if (!isNaN(ecg)) {
+                    ecgData.push(ecg);
+                }
+                if (!isNaN(bpm)) {
+                    bpmData.push(bpm);
+                }
+            })
+            .on('end', async () => {
+                if (ecgData.length === 0 || bpmData.length === 0) {
+                    return res.status(400).send('CSV file is empty or contains no valid data');
+                }
 
-        const employeeDetails = {
-            firstName: req.body.firstName,
-            lastName: req.body.lastName,
-            age: req.body.age,
-            email: req.body.email,
-            idCardNumber: req.body.idCardNumber,
-            ecgReading: matchedData.ecgReading,
-            bpm: matchedData.bpm
-        };
-        const result = await employeeDetailsCollection.insertOne(employeeDetails);
+                // Store data in MongoDB
+                const employeeDetails = {
+                    firstName: req.body.firstName,
+                    lastName: req.body.lastName,
+                    age: req.body.age,
+                    email: req.body.email,
+                    idCardNumber: req.body.idCardNumber,
+                    ecgReading: ecgData,
+                    bpm: bpmData
+                };
+                const result = await employeeDetailsCollection.insertOne(employeeDetails);
 
-        if (req.body.dataAccessAgreement) {
-            const anonymizedData = {
-                employee_id: result.insertedId,
-                age: employeeDetails.age,
-                ecgReading: employeeDetails.ecgReading,
-                bpm: employeeDetails.bpm
-            };
-            await anonymizedDataCollection.insertOne(anonymizedData);
-        }
+                if (req.body.dataAccessAgreement) {
+                    const noiseScale = 1; // Example noise scale; adjust as needed
+                    const anonymizedData = {
+                        employee_id: result.insertedId,
+                        age: employeeDetails.age,
+                        ecgReading: ecgData.map(reading => reading + laplaceNoise(noiseScale)),
+                        bpm: bpmData.map(reading => reading + laplaceNoise(noiseScale))
+                    };
+                    await anonymizedDataCollection.insertOne(anonymizedData);
+                }
 
-        console.log('Data inserted successfully');
+                // Update dataset.json
+                const datasetPath = path.join(__dirname, 'dataset.json');
+                let dataset = JSON.parse(fs.readFileSync(datasetPath, 'utf-8'));
+                let matchedData = dataset.find(item => item.idCardNumber === req.body.idCardNumber);
+
+                if (!matchedData) {
+                    matchedData = {
+                        idCardNumber: req.body.idCardNumber,
+                        ecgReading: ecgData,
+                        bpm: bpmData
+                    };
+                    dataset.push(matchedData);
+                    fs.writeFileSync(datasetPath, JSON.stringify(dataset, null, 2));
+                }
+
+                console.log('Data inserted and dataset.json updated successfully');
+
+                res.send(`
+                    <!DOCTYPE html>
+                    <html lang="en">
+                    <head>
+                        <meta charset="UTF-8">
+                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                        <title>Form Submission Successful</title>
+                        <link rel="stylesheet" href="styles.css">
+                    </head>
+                    <body>
+                        <div class="container">
+                            <h1>Form Submission Successful</h1>
+                            <p>Thank you for submitting your information. Your data has been processed and stored successfully.</p>
+                        </div>
+                    </body>
+                    </html>
+                `);
+            })
+            .on('error', (error) => {
+                res.status(500).send('Error reading CSV file');
+            });
+    } catch (error) {
+        console.error('Error inserting data:', error);
+        res.status(500).send('Error inserting data');
+    }
+});
+
+app.get('/anonymized-data-graph', async (req, res) => {
+    if (!req.session.isAuthenticated) {
+        return res.status(401).send('Unauthorized');
+    }
+
+    try {
+        const db = client.db('employee_db');
+        const anonymizedDataCollection = db.collection('anonymized_data');
+        const data = await anonymizedDataCollection.find().toArray();
 
         res.send(`
             <!DOCTYPE html>
@@ -193,89 +212,152 @@ app.post('/submit', async (req, res) => {
             <head>
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>Form Submission Successful</title>
-                <style>
-                    body {
-                        font-family: 'Roboto', sans-serif;
-                        background-image: url('backgroundgold.jpg');
-                        background-size: cover;
-                        background-repeat: no-repeat;
-                        background-attachment: fixed;
-                        display: flex;
-                        justify-content: center;
-                        align-items: center;
-                        height: 100vh;
-                        margin: 0;
-                        padding: 0;
-                    }
-                    .submission-container {
-                        background-color: rgba(255, 255, 255, 0.8); /* Lightly transparent background */
-                        padding: 30px;
-                        border-radius: 10px;
-                        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-                        width: 400px;
-                        text-align: center;
-                    }
-                    .submission-container h2 {
-                        font-weight: 500;
-                        margin-bottom: 20px;
-                        color: #333;
-                    }
-                    .submitted-data {
-                        text-align: left;
-                        margin-bottom: 20px;
-                    }
-                    .submitted-data p {
-                        margin: 10px 0;
-                        color: #555;
-                    }
-                </style>
+                <title>Anonymized Data Graph</title>
+                <link rel="stylesheet" href="styles.css">
+                <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
             </head>
             <body>
-                <div class="submission-container">
-                    <h2>Form Submission Successful</h2>
-                    <div class="submitted-data">
-                        <p><strong>Name:</strong> ${req.body.firstName} ${req.body.lastName}</p>
-                        <p><strong>Age:</strong> ${req.body.age}</p>
-                        <p><strong>Email:</strong> ${req.body.email}</p>
-                        <p><strong>ID Card Number:</strong> ${req.body.idCardNumber}</p>
-                        <p><strong>Average ECG Reading:</strong> ${matchedData.ecgReading}</p>
-                        <p><strong>Average BPM:</strong> ${matchedData.bpm}</p>
+                <div class="container">
+                    <h1 style="color:black;">Anonymized Data Graph</h1>
+                    <div id="charts">
+                        ${data.map((row, index) => `
+                            <div class="chart-container">
+                                <canvas id="chart${index}"></canvas>
+                                <script>
+                                    const ctx${index} = document.getElementById('chart${index}').getContext('2d');
+                                    new Chart(ctx${index}, {
+                                        type: 'line',
+                                        data: {
+                                            labels: Array.from({ length: ${row.ecgReading.length} }, (_, i) => i + 1),
+                                            datasets: [
+                                                {
+                                                    label: 'ECG (mV)',
+                                                    data: ${JSON.stringify(row.ecgReading)},
+                                                    borderColor: 'blue',
+                                                    fill: false,
+                                                    yAxisID: 'y',
+                                                    tension: 0.1,
+                                                    pointRadius: 0
+                                                },
+                                                {
+                                                    label: 'BPM',
+                                                    data: ${JSON.stringify(row.bpm)},
+                                                    borderColor: 'red',
+                                                    fill: false,
+                                                    yAxisID: 'y1',
+                                                    tension: 0.1,
+                                                    pointRadius: 0
+                                                }
+                                            ]
+                                        },
+                                        options: {
+                                            responsive: true,
+                                            scales: {
+                                                y: {
+                                                    type: 'linear',
+                                                    position: 'left',
+                                                    title: {
+                                                        display: true,
+                                                        text: 'ECG (mV)',
+                                                        color: 'blue'
+                                                    },
+                                                    ticks: {
+                                                        color: 'blue'
+                                                    }
+                                                },
+                                                y1: {
+                                                    type: 'linear',
+                                                    position: 'right',
+                                                    title: {
+                                                        display: true,
+                                                        text: 'BPM',
+                                                        color: 'red'
+                                                    },
+                                                    ticks: {
+                                                        color: 'red'
+                                                    },
+                                                    grid: {
+                                                        drawOnChartArea: false
+                                                    }
+                                                }
+                                            },
+                                            plugins: {
+                                                legend: {
+                                                    labels: {
+                                                        color: '#333'
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    });
+                                </script>
+                            </div>
+                        `).join('')}
                     </div>
                 </div>
             </body>
             </html>
         `);
     } catch (error) {
-        console.error('Error inserting data into MongoDB:', error);
-        res.status(500).send('Internal Server Error');
+        console.error('Error retrieving anonymized data:', error);
+        res.status(500).send('Error retrieving anonymized data');
     }
 });
 
-// Middleware to check if the user is authenticated
-function checkAuthentication(req, res, next) {
-    if (req.session && req.session.isAuthenticated) {
-        next();
-    } else {
-        res.status(403).send('Forbidden: You are not authenticated');
-    }
-}
 
-// Route to retrieve anonymized data for data scientist
-app.get('/anonymized-data', checkAuthentication, async (req, res) => {
+
+app.get('/anonymized-data-table', async (req, res) => {
+    if (!req.session.isAuthenticated) {
+        return res.status(401).send('Unauthorized');
+    }
+
     try {
         const db = client.db('employee_db');
         const anonymizedDataCollection = db.collection('anonymized_data');
+        const data = await anonymizedDataCollection.find().toArray();
 
-        const anonymizedData = await anonymizedDataCollection.find({}).toArray();
-        res.json(anonymizedData);
+        res.send(`
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Anonymized Data Table</title>
+                <link rel="stylesheet" href="styles.css">
+            </head>
+            <body>
+                <div class="container">
+                    <h1>Anonymized Data Table</h1>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Employee ID</th>
+                                <th>Age</th>
+                                <th>ECG Reading</th>
+                                <th>BPM</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${data.map(row => `
+                                <tr>
+                                    <td>${row.employee_id}</td>
+                                    <td>${row.age}</td>
+                                    <td>${row.ecgReading.join(', ')}</td>
+                                    <td>${row.bpm.join(', ')}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </body>
+            </html>
+        `);
     } catch (error) {
         console.error('Error retrieving anonymized data:', error);
-        res.status(500).send('Internal Server Error');
+        res.status(500).send('Error retrieving anonymized data');
     }
 });
 
-// Start the server
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });
