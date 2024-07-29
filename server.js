@@ -5,7 +5,6 @@ const { MongoClient, ObjectId } = require('mongodb');
 const dotenv = require('dotenv');
 const session = require('express-session');
 const Ajv = require('ajv');
-const fs = require('fs');
 const { spawn } = require('child_process');
 
 dotenv.config();
@@ -63,11 +62,12 @@ app.use(session({
 app.use(express.static(path.join(__dirname, 'views')));
 app.use(express.static(__dirname));
 
+// Routes
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'views', 'index.html'));
 });
 
-app.get('/login', (req, res) => {
+app.get('/datascientist-login-page', (req, res) => {
     res.sendFile(path.join(__dirname, 'views', 'login.html'));
 });
 
@@ -131,8 +131,8 @@ app.post('/submit', async (req, res) => {
             if (code === 0) {
                 console.log('Data processed and anonymized successfully');
 
-                res.send(`
-                    <!DOCTYPE html>
+                res.send(
+                    `<!DOCTYPE html>
                     <html lang="en">
                     <head>
                         <meta charset="UTF-8">
@@ -146,8 +146,8 @@ app.post('/submit', async (req, res) => {
                             <p>Thank you for submitting your information. Your data has been processed and stored successfully.</p>
                         </div>
                     </body>
-                    </html>
-                `);
+                    </html>`
+                );
             } else {
                 res.status(500).send('Error processing data');
             }
@@ -168,8 +168,8 @@ app.get('/anonymized-data', async (req, res) => {
         const anonymizedDataCollection = db.collection('anonymized_data');
         const data = await anonymizedDataCollection.find().toArray();
 
-        res.send(`
-            <!DOCTYPE html>
+        res.send(
+            `<!DOCTYPE html>
             <html lang="en">
             <head>
                 <meta charset="UTF-8">
@@ -189,25 +189,153 @@ app.get('/anonymized-data', async (req, res) => {
                             </tr>
                         </thead>
                         <tbody>
-                            ${data.map(row => `
-                                <tr>
+                            ${data.map(row => 
+                                `<tr>
                                     <td>${row._id}</td>
                                     <td>${row.age !== undefined ? row.age : 'undefined'}</td>
-                                    <td><a href="/downloads/${row.employee_id}_anonymized.csv" download>Download Dataset </a></td>
-                                </tr>
-                            `).join('')}
+                                    <td><a href="/downloads/${row.employee_id}_anonymized.csv" download>Download Dataset</a></td>
+                                </tr>`
+                            ).join('')}
                         </tbody>
                     </table>
                 </div>
             </body>
-            </html>
-        `);
+            </html>`
+        );
     } catch (error) {
         console.error('Error retrieving anonymized data:', error);
         res.status(500).send('Error retrieving anonymized data');
     }
 });
 
+app.get('/employee-admin-page', (req, res) => {
+    res.send(
+        `<!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Employee Admin Page</title>
+            <link rel="stylesheet" href="styles.css">
+        </head>
+        <body>
+            <div class="container">
+                <h1>Employee Admin Page</h1>
+                <form id="searchForm">
+                    <label for="companyId">Enter Company ID:</label>
+                    <input type="text" id="companyId" name="companyId" required>
+                    <button type="submit">Search</button>
+                </form>
+                <div id="result"></div>
+            </div>
+            <script>
+                document.getElementById('searchForm').addEventListener('submit', async (event) => {
+                    event.preventDefault();
+                    const companyId = document.getElementById('companyId').value;
+                    const response = await fetch('/searchEmployee', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ companyId })
+                    });
+                    const result = await response.json();
+                    document.getElementById('result').innerHTML = result.html;
+                });
+            </script>
+        </body>
+        </html>`
+    );
+});
+
+app.post('/searchEmployee', async (req, res) => {
+    const { companyId } = req.body;
+    try {
+        const db = client.db('employee_db');
+        const employeeDetailsCollection = db.collection('employee_details');
+        const employee = await employeeDetailsCollection.findOne({ idCardNumber: companyId });
+
+        if (employee) {
+            res.json({
+                html: `
+                <form action="/updateEmployee" method="POST">
+                    <input type="hidden" name="employeeId" value="${employee._id}">
+                    <label for="firstName">First Name:</label>
+                    <input type="text" id="firstName" name="firstName" value="${employee.firstName}" required>
+                    <label for="lastName">Last Name:</label>
+                    <input type="text" id="lastName" name="lastName" value="${employee.lastName}" required>
+                    <label for="age">Age:</label>
+                    <input type="number" id="age" name="age" value="${employee.age}" required>
+                    <label for="email">Email:</label>
+                    <input type="email" id="email" name="email" value="${employee.email}" required>
+                    <label for="idCardNumber">ID Card Number:</label>
+                    <input type="text" id="idCardNumber" name="idCardNumber" value="${employee.idCardNumber}" required>
+                    <label for="privacyAgreement">Privacy Agreement:</label>
+                    <input type="checkbox" id="privacyAgreement" name="privacyAgreement" ${employee.privacyAgreement ? 'checked' : ''}>
+                    <label for="dataAccessAgreement">Data Access Agreement:</label>
+                    <input type="checkbox" id="dataAccessAgreement" name="dataAccessAgreement" ${employee.dataAccessAgreement ? 'checked' : ''}>
+                    <button type="submit">Update</button>
+                </form>`
+            });
+        } else {
+            res.json({ html: 'No employee found with the given ID' });
+        }
+    } catch (error) {
+        console.error('Error searching employee:', error);
+        res.status(500).send('Error searching employee');
+    }
+});
+
+app.post('/updateEmployee', async (req, res) => {
+    const employeeId = req.body.employeeId;
+    const updatedEmployee = {
+        firstName: req.body.firstName,
+        lastName: req.body.lastName,
+        age: parseInt(req.body.age, 10),
+        email: req.body.email,
+        idCardNumber: req.body.idCardNumber,
+        privacyAgreement: req.body.privacyAgreement === 'on',
+        dataAccessAgreement: req.body.dataAccessAgreement === 'on'
+    };
+
+    try {
+        const db = client.db('employee_db');
+        const employeeDetailsCollection = db.collection('employee_details');
+        const anonymizedDataCollection = db.collection('anonymized_data');
+
+        // Update employee details
+        await employeeDetailsCollection.updateOne(
+            { _id: new ObjectId(employeeId) },
+            { $set: updatedEmployee }
+        );
+
+        // Check if data access agreement is revoked
+        if (!updatedEmployee.dataAccessAgreement) {
+            // Find and delete anonymized data for the employee
+            await anonymizedDataCollection.deleteOne({ employee_id: employeeId });
+        }
+
+        res.send(
+            `<!DOCTYPE html>
+            <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Update Successful</title>
+                <link rel="stylesheet" href="styles.css">
+            </head>
+            <body>
+                <div class="container">
+                    <h1>Update Successful</h1>
+                    <p>The employee details have been updated successfully.</p>
+                </div>
+            </body>
+            </html>`
+        );
+    } catch (error) {
+        console.error('Error updating employee:', error);
+        res.status(500).send('Error updating employee');
+    }
+});
+
 app.listen(PORT, () => {
-    console.log(`Server is running on http://localhost:${PORT}`);
+    console.log(`Server is running on port ${PORT}`);
 });
