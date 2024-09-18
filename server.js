@@ -51,6 +51,34 @@ connectToDB().catch(console.error);
 
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
+// Save login activity to MongoDB
+app.post('/save-login', async (req, res) => {
+    const { account, txHash, timestamp } = req.body;
+
+    // Log incoming request data to verify it's correct
+    console.log("Received data from frontend:", req.body);
+
+    try {
+        const db = client.db('blockchain_db');
+        const loginCollection = db.collection('datascientist_details');
+
+        const loginRecord = {
+            account,
+            txHash,
+            timestamp: new Date(timestamp),
+        };
+
+        console.log("Saving the following login record to MongoDB:", loginRecord);
+
+        const result = await loginCollection.insertOne(loginRecord);
+
+        console.log("MongoDB Insert Result:", result);
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Error saving login to MongoDB:', error);
+        res.json({ success: false });
+    }
+});
 
 app.use(session({
     secret: process.env.SESSION_SECRET,

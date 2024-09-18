@@ -3,26 +3,118 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login</title>
-    <link rel="stylesheet" href="styles.css">
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+    <title>Data Scientist Login with Blockchain</title>
+    <script src="https://cdn.jsdelivr.net/gh/ethereum/web3.js/dist/web3.min.js"></script>
 </head>
 <body>
-    <div class="form-container">
-        <h1>Login</h1>
-        <form action="/login" method="post">
-            <div class="form-group">
-                <label for="username">Username:</label>
-                <input type="text" id="username" name="username" required>
-            </div>
-            <div class="form-group">
-                <label for="password">Password:</label>
-                <input type="password" id="password" name="password" required>
-            </div>
-            <div class="form-buttons">
-                <button type="submit">Login</button>
-            </div>
-        </form>
-    </div>
+    <h1>Data Scientist Login</h1>
+    <button id="loginButton" onclick="loginWithMetaMask()">Login with MetaMask</button>
+    <p id="loginStatus"></p>
+    <p id="timestamp"></p>
+
+    <script>
+        const contractAddress = '0x38A85F78E0C20f7FBF3AaBf1a3e51DC0f5ceedae'; // Replace with your deployed contract address
+        const contractABI = [
+        {
+            "anonymous": false,
+            "inputs": [
+                { "indexed": true, "internalType": "address", "name": "dataScientist", "type": "address" },
+                { "indexed": false, "internalType": "uint256", "name": "timestamp", "type": "uint256" }
+            ],
+            "name": "LoginRecorded",
+            "type": "event"
+        },
+        {
+            "inputs": [{ "internalType": "address", "name": "", "type": "address" }],
+            "name": "logins",
+            "outputs": [
+                { "internalType": "address", "name": "dataScientist", "type": "address" },
+                { "internalType": "uint256", "name": "timestamp", "type": "uint256" }
+            ],
+            "stateMutability": "view",
+            "type": "function",
+            "constant": true
+        },
+        {
+            "inputs": [],
+            "name": "recordLogin",
+            "outputs": [],
+            "stateMutability": "nonpayable",
+            "type": "function"
+        },
+        {
+            "inputs": [{ "internalType": "address", "name": "_dataScientist", "type": "address" }],
+            "name": "getLoginDetails",
+            "outputs": [
+                { "internalType": "address", "name": "", "type": "address" },
+                { "internalType": "uint256", "name": "", "type": "uint256" }
+            ],
+            "stateMutability": "view",
+            "type": "function",
+            "constant": true
+        }
+    ];
+
+        let web3;
+        let contract;
+        let account;
+
+        // Initialize Web3 and Contract
+        if (window.ethereum) {
+            web3 = new Web3(window.ethereum);
+            contract = new web3.eth.Contract(contractABI, contractAddress);
+        } else {
+            alert("MetaMask is not installed. Please install it to use this feature.");
+        }
+
+        // Function to login with MetaMask and record login on the blockchain
+        async function loginWithMetaMask() {
+            try {
+                // Request MetaMask account access
+                const accounts = await ethereum.request({ method: 'eth_requestAccounts' });
+                account = accounts[0];
+                document.getElementById('loginStatus').innerText = "Logged in with MetaMask as: " + account;
+
+                // Send the transaction to the blockchain to record the login
+                const result = await contract.methods.recordLogin().send({ from: account });
+
+                // Transaction hash and block timestamp
+                const txHash = result.transactionHash;
+                const block = await web3.eth.getBlock(result.blockNumber);
+                const timestamp = block.timestamp * 1000;  // Convert to milliseconds for JS Date
+
+                document.getElementById('timestamp').innerText = "Login recorded at: " + new Date(timestamp);
+
+                // Send login data to the backend to store in MongoDB
+                await saveLoginToMongoDB(account, txHash, timestamp);
+
+            } catch (error) {
+                console.error(error);
+                document.getElementById('loginStatus').innerText = "Failed to log in with MetaMask.";
+            }
+        }
+
+        // Function to send login data to the backend
+        async function saveLoginToMongoDB(account, txHash, timestamp) {
+            try {
+                const response = await fetch('/save-login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ account, txHash, timestamp })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    console.log("Login data saved to MongoDB");
+                } else {
+                    console.log("Failed to save login data to MongoDB");
+                }
+            } catch (error) {
+                console.error("Error saving login data:", error);
+            }
+        }
+    </script>
 </body>
 </html>
