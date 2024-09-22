@@ -103,10 +103,9 @@ app.post('/login', (req, res) => {
     const { username, password } = req.body;
 
     if (username === process.env.USERNAME && password === process.env.PASSWORD) {
-        req.session.isAuthenticated = true;
-        res.redirect('/anonymized-data');
+        res.json({ success: true });
     } else {
-        res.status(401).send('Invalid username or password');
+        res.json({ success: false });
     }
 });
 
