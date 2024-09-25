@@ -90,7 +90,24 @@ app.use(session({
 app.use(express.static(path.join(__dirname, 'views')));
 app.use(express.static(__dirname));
 
-// Routes
+app.post('/save-login', async (req, res) => {
+    const { account, txHash, timestamp } = req.body;
+    try {
+        const db = client.db('blockchain_db');
+        const loginCollection = db.collection('datascientist_details');
+        const loginRecord = {
+            account,
+            txHash,
+            timestamp: new Date(timestamp),
+        };
+        const result = await loginCollection.insertOne(loginRecord);
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Error saving login to MongoDB:', error);
+        res.json({ success: false });
+    }
+});
+
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'views', 'index.html'));
 });
@@ -101,11 +118,60 @@ app.get('/datascientist-login-page', (req, res) => {
 
 app.post('/login', (req, res) => {
     const { username, password } = req.body;
-
     if (username === process.env.USERNAME && password === process.env.PASSWORD) {
-        res.json({ success: true });
+        req.session.isAuthenticated = true;
+        res.json({ success: true, redirectUrl: '/anonymized-data' });
     } else {
         res.json({ success: false });
+    }
+});
+
+app.get('/anonymized-data', async (req, res) => {
+    if (!req.session.isAuthenticated) {
+        return res.status(401).send('Unauthorized');
+    }
+
+    try {
+        const db = client.db('employee_db');
+        const anonymizedDataCollection = db.collection('anonymized_data');
+        const data = await anonymizedDataCollection.find().toArray();
+
+        res.send(`
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Anonymized Data Table</title>
+                <link rel="stylesheet" href="styles.css"> <!-- Linking styles.css for consistent styling -->
+            </head>
+            <body>
+                <div class="container">
+                    <h1>Anonymized Data Table</h1>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Anonymized Employee ID</th>
+                                <th>Age</th>
+                                <th>Download CSV</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${data.map(row => `
+                                <tr>
+                                    <td>${row._id}</td>
+                                    <td>${row.age || 'N/A'}</td>
+                                    <td><a href="/downloads/${row.employee_id}_anonymized.csv" download>Download Dataset</a></td>
+                                </tr>`).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </body>
+            </html>
+        `);
+    } catch (error) {
+        console.error('Error retrieving anonymized data:', error);
+        res.status(500).send('Error retrieving anonymized data');
     }
 });
 
@@ -185,7 +251,7 @@ app.post('/submit', async (req, res) => {
     }
 });
 
-app.get('/anonymized-data', async (req, res) => {
+/*app.get('/anonymized-data', async (req, res) => {
     if (!req.session.isAuthenticated) {
         return res.status(401).send('Unauthorized');
     }
@@ -233,7 +299,7 @@ app.get('/anonymized-data', async (req, res) => {
         console.error('Error retrieving anonymized data:', error);
         res.status(500).send('Error retrieving anonymized data');
     }
-});
+});*/
 
 app.get('/employee-admin-page', (req, res) => {
     res.send(

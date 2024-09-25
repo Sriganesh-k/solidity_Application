@@ -5,32 +5,32 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Data Scientist Login with Blockchain</title>
     <script src="https://cdn.jsdelivr.net/gh/ethereum/web3.js/dist/web3.min.js"></script>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css"> <!-- Linking your external CSS file -->
 </head>
 <body>
-    <h1>Data Scientist Login</h1>
-    
-    <form id="loginForm" onsubmit="handleLogin(event)">
-        <div class="form-group">
-            <label for="username">Username:</label>
-            <input type="text" id="username" name="username" required>
-        </div>
-        <div class="form-group">
-            <label for="password">Password:</label>
-            <input type="password" id="password" name="password" required>
-        </div>
-        <div class="form-buttons">
-            <button type="submit">Login</button>
-        </div>
-    </form>
+    <div class="container">
+        <h1 style="color: darkgoldenrod;">Data Scientist Login</h1>
 
-    <p id="loginStatus"></p>
-    <p id="timestamp"></p>
+        <form id="loginForm" onsubmit="handleLogin(event)">
+            <div class="form-group">
+                <label for="username" style="color: black;">Username:</label>
+                <input type="text" id="username" name="username" required>
+            </div>
+            <div class="form-group">
+                <label for="password" style="color: black;">Password:</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+            <div class="form-buttons">
+                <button type="submit">Login</button>
+            </div>
+        </form>
+
+        <p id="loginStatus"></p>
+    </div>
 
     <script>
         const contractAddress = '0x38A85F78E0C20f7FBF3AaBf1a3e51DC0f5ceedae'; // Replace with your deployed contract address
         const contractABI = [
-            // Contract ABI as per your code
             {
                 "anonymous": false,
                 "inputs": [
@@ -105,38 +105,40 @@
                 document.getElementById('loginStatus').innerText = "Username and password are correct. Now authenticate with MetaMask.";
 
                 // Call MetaMask login function if credentials are correct
-                loginWithMetaMask();
+                await loginWithMetaMask(result.redirectUrl);
             } else {
                 document.getElementById('loginStatus').innerText = "Invalid username or password.";
             }
         }
 
         // Function to login with MetaMask and record login on the blockchain
-        async function loginWithMetaMask() {
-            try {
-                // Request MetaMask account access
-                const accounts = await ethereum.request({ method: 'eth_requestAccounts' });
-                account = accounts[0];
-                document.getElementById('loginStatus').innerText = "Logged in with MetaMask as: " + account;
+async function loginWithMetaMask(redirectUrl) {
+    try {
+        // Request MetaMask account access
+        const accounts = await ethereum.request({ method: 'eth_requestAccounts' });
+        account = accounts[0];
+        document.getElementById('loginStatus').innerText = "Logged in with MetaMask as: " + account;
 
-                // Send the transaction to the blockchain to record the login
-                const result = await contract.methods.recordLogin().send({ from: account });
+        // Send the transaction to the blockchain to record the login
+        const result = await contract.methods.recordLogin().send({ from: account });
 
-                // Transaction hash and block timestamp
-                const txHash = result.transactionHash;
-                const block = await web3.eth.getBlock(result.blockNumber);
-                const timestamp = block.timestamp * 1000;  // Convert to milliseconds for JS Date
+        // Get the block details to fetch the timestamp
+        const block = await web3.eth.getBlock(result.blockNumber);
+        const timestamp = block.timestamp * 1000;  // Convert from seconds to milliseconds for Date()
 
-                document.getElementById('timestamp').innerText = "Login recorded at: " + new Date(timestamp);
+        // Log timestamp for debugging
+        console.log("Timestamp from blockchain (ms):", new Date(timestamp));
 
-                // Send login data to the backend to store in MongoDB
-                await saveLoginToMongoDB(account, txHash, timestamp);
+        // Send login data along with the timestamp to the backend
+        await saveLoginToMongoDB(account, result.transactionHash, timestamp);
 
-            } catch (error) {
-                console.error(error);
-                document.getElementById('loginStatus').innerText = "Failed to log in with MetaMask.";
-            }
-        }
+        // After MetaMask authentication, redirect to anonymized data page
+        window.location.href = redirectUrl; // Redirect to anonymized data after successful MetaMask login
+    } catch (error) {
+        console.error(error);
+        document.getElementById('loginStatus').innerText = "Failed to log in with MetaMask.";
+    }
+}
 
         // Function to send login data to the backend
         async function saveLoginToMongoDB(account, txHash, timestamp) {
@@ -146,7 +148,7 @@
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ account, txHash, timestamp })
+                    body: JSON.stringify({ account, txHash, timestamp })  // Send the timestamp to the backend
                 });
 
                 const data = await response.json();
